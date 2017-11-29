@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+
+import commands
+import re
+import subprocess
+
+def run_cmd(cmd):
+    status, output = commands.getstatusoutput(cmd)
+    assert not status, output
+    print output
+    return output.strip()
+
+def build_branch_map():
+    """
+    Get local branch to tracking branch map.
+
+    :return: current feature branch name and a dictionary with key as local
+             branch and value as the tracking branch
+    """
+    git_branch_command = ['git', 'branch', '-vv']
+    git_branch_output = subprocess.check_output(git_branch_command)
+    branch_map = {}
+    current_branch = None
+    for line in git_branch_output.splitlines():
+        line = line.strip()
+        match = re.search('^\*?\s*(\S+)\s+\S+\s+\[(\S+)[:/\]]', line)
+        if not match:
+            msg = "Cannot identify tracking branch for '%s'" % line
+            print msg
+            continue
+
+        local_branch = match.group(1).strip()
+        tracking_branch = match.group(2).strip()
+        if line.startswith("*"):
+            current_branch  = local_branch
+        branch_map[local_branch] = tracking_branch
+
+    return current_branch, branch_map
+
+current_branch, branch_map = build_branch_map()
+
+branch_chain = []
+
+while current_branch in branch_map:
+    branch_chain.append(current_branch)
+    current_branch = branch_map[current_branch]
+
+while branch_chain:
+    pull_branch = branch_chain.pop()
+    cmd = ["git", "checkout", pull_branch]
+    print " ".join(cmd)
+    out = subprocess.check_output(cmd)
+    print out
+    cmd = ["git", "pull", "-r"]
+    print " ".join(cmd)
+    out = subprocess.check_output(cmd)
+    print out
+    print "Pulled and rebased branch: %s" % pull_branch
